@@ -275,7 +275,11 @@ pub struct Region {
     #[serde(rename = "FACTBOOK")]
     #[serde(deserialize_with = "deserialize_html_decoded")]
     factbook: String,
-    numnations: i64,
+    pub numnations: i64,
+    #[serde(skip_deserializing)]
+    totalnations: i64,
+    #[serde(skip_deserializing)]
+    updateorder: i64,
     #[serde(rename = "NATIONS")]
     #[serde(deserialize_with = "deserialize_colon_list")]
     nations: Vec<String>,
@@ -316,23 +320,26 @@ struct Officer {
 }
 
 impl Region {
-    pub fn finalize(mut self) -> Self {
+    pub fn finalize(mut self, totalnations: i64, updateorder: i64) -> Self {
         self.canon_name = self.name.to_lowercase().replace(' ', "_");
+        self.totalnations = totalnations;
+        self.updateorder = updateorder;
         self
     }
 
     pub async fn insert(&self, tx: &mut PgTransaction<'_>) -> Result<(), Box<dyn Error>> {
         sqlx::query(r"INSERT INTO regions_dump (
-                name, canon_name, factbook, numnations, nations, delegate, delegatevotes,
-                delegateauth, frontier, founder, governor, officers, power, magnetism,
-                flag_url, banner_id, banner_url, embassies, lastupdate, lastmajorupdate,
-                lastminorupdate) VALUES ($1,$2,$3,$4,$5,$6,$7,
-                $8,$9,$10,$11,$12,$13,$14,
-                $15,$16,$17,$18,$19,$20,$21)
+                name, canon_name, factbook, numnations, totalnations, updateorder, nations, 
+                delegate, delegatevotes, delegateauth, frontier, founder, governor, officers, 
+                power, magnetism, flag_url, banner_id, banner_url, embassies, lastupdate, 
+                lastmajorupdate,lastminorupdate) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+                $12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
                 ON CONFLICT (canon_name) DO UPDATE SET
                 name = EXCLUDED.name,
                 factbook = EXCLUDED.factbook,
                 numnations = EXCLUDED.numnations,
+                totalnations = EXCLUDED.totalnations,
+                updateorder = EXCLUDED.updateorder,
                 nations = EXCLUDED.nations,
                 delegate = EXCLUDED.delegate,
                 delegatevotes = EXCLUDED.delegatevotes,
@@ -354,6 +361,8 @@ impl Region {
         .bind(&self.canon_name)
         .bind(&self.factbook)
         .bind(self.numnations)
+        .bind(self.totalnations)
+        .bind(self.updateorder)
         .bind(&self.nations)
         .bind(&self.delegate)
         .bind(self.delegatevotes)

@@ -43,6 +43,9 @@ async fn stream_data_dump<R: AsyncRead + Unpin>(pool: &PgPool, input: BufReader<
     let mut tx = pool.begin().await?;
     let mut count = 0;
 
+    let mut totalnations = 0;
+    let mut updateorder = 1;
+
     loop {
         match reader.read_event_into_async(&mut buf).await {
             Err(e) => panic!(
@@ -86,13 +89,15 @@ async fn stream_data_dump<R: AsyncRead + Unpin>(pool: &PgPool, input: BufReader<
                         let str = String::from_utf8(tag_bytes)?;
                         let mut deserializer = Deserializer::from_str(&str);
 
-                        match Region::deserialize(&mut deserializer).map(Region::finalize) {
+                        match Region::deserialize(&mut deserializer).map(|r| r.finalize(totalnations, updateorder)) {
                             Ok(region) => {
                                 region.insert(&mut tx).await.unwrap_or_else(|err| {
                                     warn!("Error inserting nation {} into DB: {}", region.canon_name, err);
                                 });
 
                                 count += 1;
+                                updateorder += 1;
+                                totalnations += region.numnations;
 
                                 if count >= REGION_BATCH_SIZE {
                                     tx.commit().await?;

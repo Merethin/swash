@@ -4,6 +4,8 @@ CREATE TABLE regions_dump (
     canon_name TEXT NOT NULL UNIQUE,
     factbook TEXT,
     numnations BIGINT,
+    totalnations BIGINT,
+    updateorder BIGINT,
     nations TEXT[],
     delegate TEXT,
     delegatevotes BIGINT,
