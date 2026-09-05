@@ -1,6 +1,7 @@
 mod models;
 mod stream;
 
+use std::fmt::format;
 use std::{env, process::exit, error::Error,path::PathBuf};
 use caramel::{ns::UserAgent, log::setup_log};
 use reqwest::{ClientBuilder, Url};
@@ -9,6 +10,7 @@ use sqlx::PgPool;
 use clap::{ArgAction, Command, arg, value_parser};
 use regex::Regex;
 use log::{info, error};
+use uuid::Uuid;
 
 const PROGRAM: & str = "swash";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -88,14 +90,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
             &pool, &client, Url::parse(&format!("https://www.nationstates.net/archive/nations/{}-nations-xml.gz", date))?
         ).await?;
     } else {
+        let uuid = Uuid::new_v4();
+
         info!("Reading remote regions.xml.gz data dump");
         stream_data_dump_from_url(
-            &pool, &client, Url::parse("https://www.nationstates.net/pages/regions.xml.gz")?
+            &pool, &client, Url::parse(&format!("https://www.nationstates.net/pages/regions.xml.gz?v={}", uuid))?
         ).await?;
 
         info!("Reading remote nations.xml.gz data dump");
         stream_data_dump_from_url(
-            &pool, &client, Url::parse("https://www.nationstates.net/pages/nations.xml.gz")?
+            &pool, &client, Url::parse(&format!("https://www.nationstates.net/pages/nations.xml.gz?v={}", uuid))?
         ).await?;
     }
 
