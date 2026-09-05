@@ -7,6 +7,7 @@ use reqwest::{ClientBuilder, Url};
 use reqwest::header::{HeaderMap, HeaderValue};
 use sqlx::PgPool;
 use clap::{ArgAction, Command, arg, value_parser};
+use regex::Regex;
 use log::{info, error};
 
 const PROGRAM: & str = "swash";
@@ -14,6 +15,16 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const AUTHOR: & str = "Merethin";
 
 use crate::stream::{stream_data_dump_from_local, stream_data_dump_from_url};
+
+fn check_date(s: &str) -> Result<String, String> {
+    let regex = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
+
+    if regex.is_match(s) {
+        return Ok(s.to_string());
+    } else {
+        return Err("Invalid date format".into());
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -26,7 +37,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     ).arg(
         arg!(
             -p --path [PATH] "Parse from nations.xml.gz and regions.xml.gz files in the target directory"
-        ).required(false).value_parser(value_parser!(PathBuf))
+        ).required(false).value_parser(value_parser!(PathBuf)).conflicts_with("date")
+    ).arg(
+        arg!(
+            -d --date [DATE] "Fetch a specific date instead of the latest data dumps, format: YYYY-MM-DD in PST time"
+        ).required(false).value_parser(check_date).conflicts_with("path")
     ).get_matches();
 
     let user_agent = UserAgent::read_from_env(PROGRAM, VERSION, AUTHOR);
@@ -35,11 +50,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     headers.insert(
         "User-Agent", 
-        HeaderValue::from_str(&user_agent.api()
-    ).unwrap_or_else(|err| {
-        error!("Invalid user agent: {} - {}", user_agent.api(), err);
-        exit(1);
-    }));
+        HeaderValue::from_str(&user_agent.api()).unwrap_or_else(|err| {
+            error!("Invalid user agent: {} - {}", user_agent.api(), err);
+            exit(1);
+        }
+    ));
 
     let client = ClientBuilder::new().default_headers(headers).build()?;
 
@@ -61,6 +76,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         info!("Reading local nations.xml.gz data dump");
         stream_data_dump_from_local(
             &pool, dump_path.join("nations.xml.gz")
+        ).await?;
+    } else if let Some(date) = matches.get_one::<String>("date") {
+        info!("Reading remote regions.xml.gz data dump");
+        stream_data_dump_from_url(
+            &pool, &client, Url::parse(&format!("https://www.nationstates.net/archive/regions/{}-regions-xml.gz", date))?
+        ).await?;
+
+        info!("Reading remote nations.xml.gz data dump");
+        stream_data_dump_from_url(
+            &pool, &client, Url::parse(&format!("https://www.nationstates.net/archive/nations/{}-nations-xml.gz", date))?
         ).await?;
     } else {
         info!("Reading remote regions.xml.gz data dump");
