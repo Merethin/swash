@@ -1,7 +1,6 @@
 mod models;
 mod stream;
 
-use std::fmt::format;
 use std::{env, process::exit, error::Error,path::PathBuf};
 use caramel::{ns::UserAgent, log::setup_log};
 use reqwest::{ClientBuilder, Url};
